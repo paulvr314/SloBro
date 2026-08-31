@@ -21,6 +21,7 @@
 #include <linux/swap.h>
 
 #include <linux/mpc.h>
+#include <linux/seq_file.h>
 
 
 /* ---------------------------------------------------------------------
@@ -178,6 +179,19 @@ void mpc_hook_slow_refault(struct folio *folio, struct lru_gen_folio *lrugen)
  * Thread stuff (handles file export every 30s)
  * --------------------------------------------------------------------- */
 
+int mpc_seq_show(struct seq_file *m, struct mpc_endpoint *mpc)
+{
+	if (!mpc)
+		return 0;
+
+	seq_printf(m, "%d %u %u\n", DEPTH_NR_BINS, mpc->binwidth, mpc->max_depth_bin);
+
+	for (int i = 0; i < DEPTH_NR_BINS; i++) {
+		seq_printf(m, "%d\n", atomic_read(&mpc->depth_bins[i]));
+	}
+
+	return 0;
+}
   
 static int mpc_thread_fn(void *data) 
 {

@@ -54,6 +54,9 @@ void mpc_hook_ws_refault(struct folio *folio, struct lru_gen_folio *lrugen);
 /* Case 3: slow refault (from swap) */
 void mpc_hook_slow_refault(struct folio *folio, struct lru_gen_folio *lrugen);
 
+/* Display MPC metrics in cgroup seq_file */
+int mpc_seq_show(struct seq_file *m, struct mpc_endpoint *mpc);
+
 /* ---------------------------------------------------------------------
  * Init / teardown
  *

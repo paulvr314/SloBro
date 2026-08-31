@@ -1,0 +1,31 @@
+  DESCEND objtool
+  DESCEND bpf/resolve_btfids
+  INSTALL libsubcmd_headers
+  INSTALL libsubcmd_headers
+  CALL    scripts/checksyscalls.sh
+  CC      mm/memcontrol.o
+  CC      mm/vmpressure.o
+  CC      mm/mpc.o
+  CC      mm/swap_cgroup.o
+  CC      mm/hugetlb_cgroup.o
+  CC      mm/memory-failure.o
+  CC      mm/page_isolation.o
+  CC      mm/zpool.o
+  CC      mm/zbud.o
+  CC      mm/zsmalloc.o
+  CC      mm/early_ioremap.o
+  CC      mm/balloon_compaction.o
+  CC      mm/secretmem.o
+  CC      mm/userfaultfd.o
+  CC      mm/page_idle.o
+  CC      mm/usercopy.o
+  CC      mm/memremap.o
+  CC      mm/hmm.o
+  CHK     kernel/kheaders_data.tar.xz
+  CC      mm/memfd.o
+  CC      mm/mapping_dirty_helpers.o
+  CC      mm/ptdump.o
+  CC      mm/page_reporting.o
+  CC      mm/bootmem_info.o
+  CC [M]  mm/hwpoison-inject.o
+  CC [M]  mm/z3fold.o

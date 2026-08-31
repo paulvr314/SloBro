@@ -6629,20 +6629,9 @@ static int memory_stat_show(struct seq_file *m, void *v)
 static int memory_cgroup_mpc_show(struct seq_file *sf, void *v)
 {
 	struct mem_cgroup *memcg = mem_cgroup_from_seq(sf);
-	struct mpc_endpoint *mpc = memcg->mpc;
-	if (!mpc)
-        return 0;
-	
-	atomic_t *bins = &mpc->depth_bins;
-	seq_printf(sf, "%d %u %u\n", DEPTH_NR_BINS, mpc->binwidth, mpc->max_depth_bin);
 
-	int i;
-    for (i = 0; i < DEPTH_NR_BINS; i++) {
-        seq_printf(sf, "%d\n", atomic_read(&bins[i]));
-    }
-    return 0;
+	return mpc_seq_show(sf, memcg->mpc);
 }
-
 
 
 #ifdef CONFIG_NUMA
