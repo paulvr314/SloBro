@@ -4062,7 +4062,7 @@ restart:
 		//paul hook point for mpc
 		if (old_gen >= 0) {
             if (!folio_test_clear_active(folio)) {
-				mpc_hook_from_gen(folio, old_gen, new_gen, &lruvec->lrugen, memcg);
+				mpc_hook_from_gen(folio, old_gen, new_gen, &walk->lruvec->lrugen, memcg);
 			} else {
 				mpc_log_skip(folio);
 			}
