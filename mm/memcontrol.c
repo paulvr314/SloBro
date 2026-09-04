@@ -6626,6 +6626,7 @@ static int memory_stat_show(struct seq_file *m, void *v)
 	return 0;
 }
 
+//paul cgroup file dump
 static int memory_cgroup_mpc_show(struct seq_file *sf, void *v)
 {
 	struct mem_cgroup *memcg = mem_cgroup_from_seq(sf);

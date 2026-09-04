@@ -299,6 +299,10 @@ static void lru_gen_refault(struct folio *folio, void *shadow)
 
 	lrugen = &lruvec->lrugen;
 
+	//set active flag in folio to prevent double counting of page accesses
+	//note that this code is only meant to be run with mglru.
+	folio_set_active(folio);
+
 	if (!recent) {
 		//paul hook for slow refault
 		mpc_hook_slow_refault(folio, lrugen);

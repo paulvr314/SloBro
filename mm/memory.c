@@ -91,6 +91,8 @@
 #include "internal.h"
 #include "swap.h"
 
+#include <linux/mpc.h>
+
 #if defined(LAST_CPUPID_NOT_IN_PAGE_FLAGS) && !defined(CONFIG_COMPILE_TEST)
 #warning Unfortunate NUMA and NUMA Balancing config, growing page-frame for last_cpupid.
 #endif
@@ -4066,8 +4068,6 @@ out_release:
  */
 static vm_fault_t do_anonymous_page(struct vm_fault *vmf)
 {
-	//paul note -- this is perhaps another mpc hook location, chose to hook
-	//lru_gen_add_folio in mm_inline.h instead.
 	bool uffd_wp = vmf_orig_pte_uffd_wp(vmf);
 	struct vm_area_struct *vma = vmf->vma;
 	struct folio *folio;
@@ -4155,6 +4155,11 @@ static vm_fault_t do_anonymous_page(struct vm_fault *vmf)
 	inc_mm_counter(vma->vm_mm, MM_ANONPAGES);
 	folio_add_new_anon_rmap(folio, vma, vmf->address);
 	folio_add_lru_vma(folio, vma);
+
+	//paul hook point for first page access and set active.
+	mpc_hook_first_access(folio);
+	folio_set_active(folio);
+	
 setpte:
 	if (uffd_wp)
 		entry = pte_mkuffd_wp(entry);

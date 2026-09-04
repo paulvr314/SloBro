@@ -175,6 +175,12 @@ void mpc_hook_slow_refault(struct folio *folio, struct lru_gen_folio *lrugen)
     record_depth(memcg->mpc, depth);
 }
 
+void mpc_log_skip(struct folio *folio)
+{
+    struct mem_cgroup *memcg = folio_memcg(folio);
+    atomic_inc(&memcg->mpc->depth_bins[memcg->mpc->max_depth_bin]);
+}
+
 /* ---------------------------------------------------------------------
  * Thread stuff (handles file export every 30s)
  * --------------------------------------------------------------------- */

@@ -17,7 +17,7 @@
 #define _MPC_H
 
 #define DEPTH_NR_BINS         1000
-#define MPC_MAX_DEPTH         5000000
+#define MPC_MAX_DEPTH         750000
 
 /* Forward declarations only -- these types are used exclusively as
  * pointers in this header, so we never need their full definitions
@@ -56,6 +56,9 @@ void mpc_hook_slow_refault(struct folio *folio, struct lru_gen_folio *lrugen);
 
 /* Display MPC metrics in cgroup seq_file */
 int mpc_seq_show(struct seq_file *m, struct mpc_endpoint *mpc);
+
+//use for testing
+void mpc_log_skip(struct folio *folio);
 
 /* ---------------------------------------------------------------------
  * Init / teardown

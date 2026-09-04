@@ -262,8 +262,10 @@ static inline bool lru_gen_add_folio(struct lruvec *lruvec, struct folio *folio,
 	else
 		list_add(&folio->lru, &lrugen->folios[gen][type][zone]);
 
-	//paul hook on case for new page going into memory (depth 0).
-	mpc_hook_first_access(folio);
+	//paul note -- this was the old hook pathway for first access but it overcounts
+	//according to ai, this gets called when a pages is pulled out of LRU for maintainence, etc
+	//so you get calls here even when no access occurs. Also it seems like this straight doulbe
+	//counts on the refault path. hook was moved to do anonymous page in second attempt.
 
 	return true;
 }

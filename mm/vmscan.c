@@ -4061,7 +4061,11 @@ restart:
 
 		//paul hook point for mpc
 		if (old_gen >= 0) {
-			mpc_hook_from_gen(folio, old_gen, new_gen, &walk->lruvec->lrugen, memcg);
+            if (!folio_test_clear_active(folio)) {
+				mpc_hook_from_gen(folio, old_gen, new_gen, &lruvec->lrugen, memcg);
+			} else {
+				mpc_log_skip(folio);
+			}
 		}
 
 		if (old_gen >= 0 && old_gen != new_gen) {
@@ -4739,8 +4743,13 @@ void lru_gen_look_around(struct page_vma_mapped_walk *pvmw)
 		old_gen = folio_lru_gen(folio);
 
 		//paul second hook for in mem access
-		if (old_gen >= 0)
-			mpc_hook_from_gen(folio, old_gen, new_gen, &lruvec->lrugen, memcg);
+		if (old_gen >= 0) {
+			if (!folio_test_clear_active(folio)) {
+				mpc_hook_from_gen(folio, old_gen, new_gen, &lruvec->lrugen, memcg);
+			} else {
+				mpc_log_skip(folio);
+			}
+		}
 
 		if (old_gen < 0)
 			folio_set_referenced(folio);
