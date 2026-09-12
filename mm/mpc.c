@@ -127,6 +127,7 @@ void mpc_hook_first_access(struct folio *folio)
     struct mem_cgroup *memcg = folio_memcg(folio);
     if (mpc_should_track(folio, memcg))
         record_depth(memcg->mpc, 0);
+        atomic_inc(&memcg->mpc->depth_bins[memcg->mpc->max_depth_bin-4]);
 }
 
 void mpc_hook_from_gen(struct folio *folio, unsigned long old_gen, 
@@ -149,6 +150,8 @@ void mpc_hook_from_gen(struct folio *folio, unsigned long old_gen,
     depth += mpc_sum_anon_gens(lrugen, old_seq, old_seq) / 2;
 
     record_depth(memcg->mpc, depth);
+
+    atomic_inc(&memcg->mpc->depth_bins[memcg->mpc->max_depth_bin-3]);
 }
 
 void mpc_hook_ws_refault(struct folio *folio, struct lru_gen_folio *lrugen)
@@ -160,6 +163,8 @@ void mpc_hook_ws_refault(struct folio *folio, struct lru_gen_folio *lrugen)
     //total pages in mem
     unsigned long depth = mpc_sum_anon_gens(lrugen, lrugen->min_seq[0], lrugen->max_seq);
     record_depth(memcg->mpc, depth);
+
+    atomic_inc(&memcg->mpc->depth_bins[memcg->mpc->max_depth_bin-2]);
 }
 
 
@@ -173,6 +178,8 @@ void mpc_hook_slow_refault(struct folio *folio, struct lru_gen_folio *lrugen)
     unsigned long depth = mpc_sum_anon_gens(lrugen, lrugen->min_seq[0], lrugen->max_seq);
     depth += (total_swap_pages - get_nr_swap_pages()) / 2;
     record_depth(memcg->mpc, depth);
+
+    atomic_inc(&memcg->mpc->depth_bins[memcg->mpc->max_depth_bin-1]);
 }
 
 void mpc_log_skip(struct folio *folio)
