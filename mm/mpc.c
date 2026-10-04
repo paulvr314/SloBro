@@ -28,7 +28,7 @@
  * definitions and Data structures
  * --------------------------------------------------------------------- */
 
- #define THIRTY_SECOND_INTERVAL_MS 30000 
+ #define PAGE_WALK_INTERVAL_MS 30000 
 
 struct mpc_endpoint {
 	atomic_t depth_bins[DEPTH_NR_BINS];
@@ -125,9 +125,10 @@ static void record_depth(struct mpc_endpoint *mpc, u32 depth)
 void mpc_hook_first_access(struct folio *folio)
 {
     struct mem_cgroup *memcg = folio_memcg(folio);
-    if (mpc_should_track(folio, memcg))
+    if (mpc_should_track(folio, memcg)) {
         record_depth(memcg->mpc, 0);
         atomic_inc(&memcg->mpc->depth_bins[memcg->mpc->max_depth_bin-4]);
+    }
 }
 
 void mpc_hook_from_gen(struct folio *folio, unsigned long old_gen, 
@@ -205,18 +206,17 @@ int mpc_seq_show(struct seq_file *m, struct mpc_endpoint *mpc)
 
 	return 0;
 }
-  
+
+//I decided to have one thread per cgroup to avoid going through every cgroup.
 static int mpc_thread_fn(void *data) 
 {
-    pr_info("page_logger: thread started\n");
+    struct mem_cgroup *memcg = data;
 
-    int i = 0;
-
-    //note this is doing nothing at the moment, later will do aditional table walks if needed.
+    pr_info("new cgroup created -- page logging thread started\n");
 
     while (!kthread_should_stop()) {
-        msleep_interruptible(THIRTY_SECOND_INTERVAL_MS);
-        i++;
+        msleep_interruptible(PAGE_WALK_INTERVAL_MS);
+        
     }
 
     pr_info("page_logger: thread stopping\n");
@@ -241,7 +241,7 @@ static int mpc_thread_fn(void *data)
     mpc->binwidth = MPC_MAX_DEPTH / DEPTH_NR_BINS;
 	mpc->enabled = true;
 
-    mpc->thread = kthread_run(mpc_thread_fn, NULL, "mpc_thread");
+    mpc->thread = kthread_run(mpc_thread_fn, memcg, "mpc_thread");
 
 	return mpc;
  }
