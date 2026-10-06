@@ -131,8 +131,7 @@ void mpc_hook_first_access(struct folio *folio)
     }
 }
 
-void mpc_hook_from_gen(struct folio *folio, unsigned long old_gen, 
-    unsigned long new_gen, struct lru_gen_folio *lrugen, struct mem_cgroup *memcg)
+void mpc_hook_from_gen(struct folio *folio, struct lru_gen_folio *lrugen, struct mem_cgroup *memcg, int old_gen)
 {
     if (!mpc_should_track(folio, memcg))
         return;
@@ -183,14 +182,8 @@ void mpc_hook_slow_refault(struct folio *folio, struct lru_gen_folio *lrugen)
     atomic_inc(&memcg->mpc->depth_bins[memcg->mpc->max_depth_bin-1]);
 }
 
-void mpc_log_skip(struct folio *folio)
-{
-    struct mem_cgroup *memcg = folio_memcg(folio);
-    atomic_inc(&memcg->mpc->depth_bins[memcg->mpc->max_depth_bin]);
-}
-
 /* ---------------------------------------------------------------------
- * Thread stuff (handles file export every 30s)
+ * Export to cgroup fs
  * --------------------------------------------------------------------- */
 
 int mpc_seq_show(struct seq_file *m, struct mpc_endpoint *mpc)
@@ -205,6 +198,86 @@ int mpc_seq_show(struct seq_file *m, struct mpc_endpoint *mpc)
 	}
 
 	return 0;
+}
+
+/* ---------------------------------------------------------------------
+ * Thread stuff (handles file export every 30s)
+ * --------------------------------------------------------------------- */
+
+//callback for pte
+static void page_logger_pte_entry(pte_t *pte, unsigned long addr,
+                                 unsigned long next, struct mm_walk *walk)
+{
+    struct folio *folio;
+    struct mem_cgroup *memcg = walk->private;
+    struct lruvec *lruvec;
+
+    //check if the young bit is set, otherwise do nothing
+    if (!pte_present(ptep_get(pte)))
+        return;
+
+    if (!ptep_test_and_clear_young(walk->vma, addr, pte))
+        return;
+
+    //if we cleared the young bit, we first have to check whether to count the folio towards the mpc
+    //then once the mpc has been settled, we can activate the folio to move it to the youngest gen
+    
+    //get folio
+    folio = vm_normal_folio(walk->vma, addr, ptep_get(pte));
+    
+    if (!folio || !folio_test_lru(folio))
+        return;
+
+    //check that the folio is anonymous and ignore flag is not set
+    if (folio_test_anon(folio) && !folio_test_clear_counted(folio)) {
+        lruvec = folio_lruvec(folio);
+        old_gen = folio_lru_gen(folio);
+        mpc_hook_from_gen(folio, &lruvec->lrugen, memcg, old_gen);
+    }
+    
+    //check that folio is not already active, then activate it
+    if (!folio_test_active(folio))
+        folio_activate(folio);
+}
+
+
+//walk_ops struct for walk_page_range, to be used in process_mm()
+static const struct mm_walk_ops page_logger_walk_ops = {
+    .pgd_entry = NULL,
+    .p4d_entry = NULL,
+    .pud_entry = NULL,
+    .pmd_entry = NULL,
+    .pte_entry = page_logger_pte_entry,
+    .pte_hole = NULL,
+    .hugetlb_entry = NULL,
+    .test_walk = NULL,
+    .pre_vma = NULL,
+    .post_vma = NULL,
+    .walk_lock = PGWALK_WRLOCK
+};
+
+
+//walk page tables for each process in cgroup
+static void scan_memcg(struct mem_cgroup *memcg)
+{
+    struct css_task_iter it;
+    struct task_struct  *task;
+    struct mm_struct    *mm;
+
+    css_task_iter_start(&memcg->css, CSS_TASK_ITER_PROCS, &it);
+
+    while ((task = css_task_iter_next(&it))) {
+        mm = get_task_mm(task);
+        if (!mm)
+            continue;
+
+        mmap_write_lock(mm);
+        walk_page_range(mm, 0, TASK_SIZE, &page_logger_walk_ops, memcg);
+        mmap_write_unlock(mm);
+        mmput(mm);
+    }
+
+    css_task_iter_end(&it);
 }
 
 //I decided to have one thread per cgroup to avoid going through every cgroup.

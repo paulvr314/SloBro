@@ -118,6 +118,7 @@
 	DEF_PAGEFLAG_NAME(mappedtodisk),				\
 	DEF_PAGEFLAG_NAME(reclaim),					\
 	DEF_PAGEFLAG_NAME(swapbacked),					\
+	DEF_PAGEFLAG_NAME(counted),					\
 	DEF_PAGEFLAG_NAME(unevictable)					\
 IF_HAVE_PG_MLOCK(mlocked)						\
 IF_HAVE_PG_UNCACHED(uncached)						\

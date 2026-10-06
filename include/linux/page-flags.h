@@ -136,6 +136,7 @@ enum pageflags {
 	PG_arch_2,
 	PG_arch_3,
 #endif
+	PG_counted,         /*paul*/
 	__NR_PAGEFLAGS,
 
 	PG_readahead = PG_reclaim,
@@ -478,6 +479,9 @@ PAGEFLAG(Active, active, PF_HEAD) __CLEARPAGEFLAG(Active, active, PF_HEAD)
 	TESTCLEARFLAG(Active, active, PF_HEAD)
 PAGEFLAG(Workingset, workingset, PF_HEAD)
 	TESTCLEARFLAG(Workingset, workingset, PF_HEAD)
+PAGEFLAG(Counted, counted, PF_NO_HEAD)         /*paul*/
+	TESTSETFLAG(Counted, counted, PF_HEAD)
+	TESTCLEARFLAG(Counted, counted, PF_HEAD)
 __PAGEFLAG(Slab, slab, PF_NO_TAIL)
 PAGEFLAG(Checked, checked, PF_NO_COMPOUND)	   /* Used by some filesystems */
 
