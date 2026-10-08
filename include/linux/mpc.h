@@ -29,6 +29,16 @@ struct lru_gen_folio;
 struct mpc_endpoint;
 
 /* ---------------------------------------------------------------------
+ * folio counted flag helpers
+ * --------------------------------------------------------------------- */
+
+//check page counted and clear
+bool mpc_page_already_counted(struct folio *folio);
+
+//set page counted
+void mpc_set_page_counted(struct folio *folio);
+
+/* ---------------------------------------------------------------------
  * Access-recording hooks
  *
  * These are called from the various MGLRU access/refault paths

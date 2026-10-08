@@ -111,9 +111,15 @@ static inline bool mpc_should_track(struct folio *folio, struct mem_cgroup *memc
 }
 
 //checks and clears the counted bit on a folio, returns true if it was not set.
-static inline bool page_already_counted(struct folio *folio)
+inline bool mpc_page_already_counted(struct folio *folio)
 {
-    return !folio_test_clear_counted(folio);
+    return folio_test_clear_counted(folio);
+}
+
+//called by all 3 out of mem accesses, plus other pathways in the kernel
+inline void mpc_set_page_counted(struct folio *folio)
+{
+    folio_set_counted(folio);
 }
 
 static void record_depth(struct mpc_endpoint *mpc, u32 depth)
@@ -136,15 +142,19 @@ void mpc_hook_first_access(struct folio *folio)
     if (mpc_should_track(folio, memcg)) {
         record_depth(memcg->mpc, 0);
         atomic_inc(&memcg->mpc->depth_bins[memcg->mpc->max_depth_bin-4]);
+
+        mpc_set_page_counted(folio);
     }
 }
 
+//Note that this function should be called for all found young pages
+//it filters out file-backed and flagged pages itself, so no checks need to occur in hook points
 void mpc_hook_from_gen(struct folio *folio, struct lru_gen_folio *lrugen, struct mem_cgroup *memcg, int old_gen)
 {
     if (!mpc_should_track(folio, memcg))
         return;
 
-    if (page_already_counted(folio))
+    if (mpc_page_already_counted(folio))
         return;
 
     /* Convert old_gen index to its true sequence number */
@@ -176,8 +186,9 @@ void mpc_hook_ws_refault(struct folio *folio, struct lru_gen_folio *lrugen)
     record_depth(memcg->mpc, depth);
 
     atomic_inc(&memcg->mpc->depth_bins[memcg->mpc->max_depth_bin-2]);
-}
 
+    mpc_set_page_counted(folio);
+}
 
 void mpc_hook_slow_refault(struct folio *folio, struct lru_gen_folio *lrugen)
 {
@@ -191,6 +202,8 @@ void mpc_hook_slow_refault(struct folio *folio, struct lru_gen_folio *lrugen)
     record_depth(memcg->mpc, depth);
 
     atomic_inc(&memcg->mpc->depth_bins[memcg->mpc->max_depth_bin-1]);
+
+    mpc_set_page_counted(folio);
 }
 
 /* ---------------------------------------------------------------------
@@ -215,32 +228,36 @@ int mpc_seq_show(struct seq_file *m, struct mpc_endpoint *mpc)
  * Thread stuff (handles file export every 30s)
  * --------------------------------------------------------------------- */
 
-//callback for pte
+//callback for pte -- I try to follow the same workflow as lru_gen_look_around in vmscan.c.
 static void page_logger_pte_entry(pte_t *pte, unsigned long addr,
                                  unsigned long next, struct mm_walk *walk)
 {
     struct folio *folio;
     struct mem_cgroup *memcg = walk->private;
     struct lruvec *lruvec;
+    struct vm_area_struct *vma = walk->vma;
+    pte_t ptent = ptep_get(pte);
     int old_gen, new_gen;
 
     //check if the young bit is set, otherwise do nothing
-    if (!pte_present(ptep_get(pte)))
+    if (!pte_present(ptent))
         return;
+    if (!pte_young(ptent))
+		return;
 
-    if (!ptep_test_and_clear_young(walk->vma, addr, pte))
-        return;
+    folio = vm_normal_folio(vma, addr, ptent);
+	if (!folio)
+		return 0;
+
+    if (!ptep_test_and_clear_young(vma, addr, pte))
+		VM_WARN_ON_ONCE(true);
 
     /*if we cleared the young bit, then we call the young page mpc handler first
     This is important since the mpc needs that page to be in it's old gen
     to properly count it. Once this is done, we can move the page to the new gen*/
-    
-    folio = vm_normal_folio(walk->vma, addr, ptep_get(pte));
-    if (!folio)
-        return;
 
     //mpc count folio and activate it
-    //I am trying to copy the folio activation workflow from vmscan.c here
+    //I am trying to copy the folio activation workflow from lru_gen_look_around in vmscan.c here
     lruvec = folio_lruvec(folio);
     old_gen = folio_lru_gen(folio);
     DEFINE_MAX_SEQ(lruvec);
@@ -248,6 +265,12 @@ static void page_logger_pte_entry(pte_t *pte, unsigned long addr,
 
     if (old_gen >= 0)
         mpc_hook_from_gen(folio, &lruvec->lrugen, memcg, old_gen);
+
+    //Move PTE dirtiness to the folio (as MGLRU does)
+	if (pte_dirty(ptent) && !folio_test_dirty(folio) &&
+	    !(folio_test_anon(folio) && folio_test_swapbacked(folio) &&
+	      !folio_test_swapcache(folio)))
+		folio_mark_dirty(folio);
     
     if (old_gen < 0)
 		folio_set_referenced(folio);
@@ -289,6 +312,9 @@ static void scan_memcg(struct mem_cgroup *memcg)
         mmap_write_lock(mm);
         walk_page_range(mm, 0, TASK_SIZE, &page_logger_walk_ops, memcg);
         mmap_write_unlock(mm);
+        //TODO: talk to shaurya about this -- flushing tlb increases young bit accuracy for hot pages
+        //but maybe changes linux behavior?
+        flush_tlb_mm(mm);
         mmput(mm);
     }
 

@@ -3153,6 +3153,10 @@ static vm_fault_t wp_page_copy(struct vm_fault *vmf)
 		 * new page to be mapped directly into the secondary page table.
 		 */
 		BUG_ON(unshare && pte_write(entry));
+
+		//paul hook point for a duplicate page
+		mpc_hook_first_access(new_folio);
+
 		set_pte_at_notify(mm, vmf->address, vmf->pte, entry);
 		update_mmu_cache_range(vmf, vma, vmf->address, vmf->pte, 1);
 		if (old_folio) {
@@ -4012,6 +4016,7 @@ vm_fault_t do_swap_page(struct vm_fault *vmf)
 
 	VM_BUG_ON(!folio_test_anon(folio) ||
 			(pte_write(pte) && !PageAnonExclusive(page)));
+
 	set_pte_at(vma->vm_mm, vmf->address, vmf->pte, pte);
 	arch_do_swap_page(vma->vm_mm, vma, vmf->address, pte, vmf->orig_pte);
 
@@ -4156,9 +4161,8 @@ static vm_fault_t do_anonymous_page(struct vm_fault *vmf)
 	folio_add_new_anon_rmap(folio, vma, vmf->address);
 	folio_add_lru_vma(folio, vma);
 
-	//paul hook point for first page access and set active.
+	//paul hook point for first page access.
 	mpc_hook_first_access(folio);
-	folio_set_active(folio);
 	
 setpte:
 	if (uffd_wp)
