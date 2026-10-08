@@ -98,7 +98,9 @@ static unsigned long mpc_sum_anon_gens(struct lru_gen_folio *lrugen,
 }
 
 
-//checks that page is anon and that mpc is enabled for the memcg
+//I am trying to put as much logic that is specific to my mpc here, and avoid code duplication
+//or extra checks inside of other kernel code pathways.
+//This function should only return true when the folio is anonymous and the memcg has mpc enabled.
 static inline bool mpc_should_track(struct folio *folio, struct mem_cgroup *memcg)
 {
     if (folio_is_file_lru(folio))
@@ -106,6 +108,12 @@ static inline bool mpc_should_track(struct folio *folio, struct mem_cgroup *memc
     if (!memcg || !memcg->mpc || !memcg->mpc->enabled)
         return false;
     return true;
+}
+
+//checks and clears the counted bit on a folio, returns true if it was not set.
+static inline bool page_already_counted(struct folio *folio)
+{
+    return !folio_test_clear_counted(folio);
 }
 
 static void record_depth(struct mpc_endpoint *mpc, u32 depth)
@@ -134,6 +142,9 @@ void mpc_hook_first_access(struct folio *folio)
 void mpc_hook_from_gen(struct folio *folio, struct lru_gen_folio *lrugen, struct mem_cgroup *memcg, int old_gen)
 {
     if (!mpc_should_track(folio, memcg))
+        return;
+
+    if (page_already_counted(folio))
         return;
 
     /* Convert old_gen index to its true sequence number */
@@ -211,6 +222,7 @@ static void page_logger_pte_entry(pte_t *pte, unsigned long addr,
     struct folio *folio;
     struct mem_cgroup *memcg = walk->private;
     struct lruvec *lruvec;
+    int old_gen, new_gen;
 
     //check if the young bit is set, otherwise do nothing
     if (!pte_present(ptep_get(pte)))
@@ -219,25 +231,28 @@ static void page_logger_pte_entry(pte_t *pte, unsigned long addr,
     if (!ptep_test_and_clear_young(walk->vma, addr, pte))
         return;
 
-    //if we cleared the young bit, we first have to check whether to count the folio towards the mpc
-    //then once the mpc has been settled, we can activate the folio to move it to the youngest gen
+    /*if we cleared the young bit, then we call the young page mpc handler first
+    This is important since the mpc needs that page to be in it's old gen
+    to properly count it. Once this is done, we can move the page to the new gen*/
     
-    //get folio
     folio = vm_normal_folio(walk->vma, addr, ptep_get(pte));
-    
-    if (!folio || !folio_test_lru(folio))
+    if (!folio)
         return;
 
-    //check that the folio is anonymous and ignore flag is not set
-    if (folio_test_anon(folio) && !folio_test_clear_counted(folio)) {
-        lruvec = folio_lruvec(folio);
-        old_gen = folio_lru_gen(folio);
+    //mpc count folio and activate it
+    //I am trying to copy the folio activation workflow from vmscan.c here
+    lruvec = folio_lruvec(folio);
+    old_gen = folio_lru_gen(folio);
+    DEFINE_MAX_SEQ(lruvec);
+	new_gen = lru_gen_from_seq(max_seq);
+
+    if (old_gen >= 0)
         mpc_hook_from_gen(folio, &lruvec->lrugen, memcg, old_gen);
-    }
     
-    //check that folio is not already active, then activate it
-    if (!folio_test_active(folio))
-        folio_activate(folio);
+    if (old_gen < 0)
+		folio_set_referenced(folio);
+	else if (old_gen != new_gen)
+		folio_activate(folio);
 }
 
 
@@ -289,7 +304,7 @@ static int mpc_thread_fn(void *data)
 
     while (!kthread_should_stop()) {
         msleep_interruptible(PAGE_WALK_INTERVAL_MS);
-        
+        scan_memcg(memcg);
     }
 
     pr_info("page_logger: thread stopping\n");

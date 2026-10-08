@@ -4743,12 +4743,12 @@ void lru_gen_look_around(struct page_vma_mapped_walk *pvmw)
 		old_gen = folio_lru_gen(folio);
 
 		//paul second hook for in mem access
+		/*note that old_gen < 0 means that the page is currently outside of
+		a generation due to some kernel process (such as eviction candidacy)
+		We should have counted this access, but but we can't account for this page since
+		we don't know which generation the page was accessed from.*/
 		if (old_gen >= 0) {
-			if (!folio_test_clear_active(folio)) {
-				mpc_hook_from_gen(folio, &lruvec->lrugen, memcg);
-			} else {
-				mpc_log_skip(folio);
-			}
+			mpc_hook_from_gen(folio, &lruvec->lrugen, memcg);
 		}
 
 		if (old_gen < 0)
