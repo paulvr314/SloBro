@@ -4744,7 +4744,7 @@ void lru_gen_look_around(struct page_vma_mapped_walk *pvmw)
 		We should have counted this access, but but we can't account for this page since
 		we don't know which generation the page was accessed from.*/
 		if (old_gen >= 0) {
-			mpc_hook_from_gen(folio, &lruvec->lrugen, memcg);
+			mpc_hook_from_gen(folio, &lruvec->lrugen, memcg, old_gen);
 		}
 
 		if (old_gen < 0)

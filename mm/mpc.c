@@ -23,12 +23,22 @@
 #include <linux/mpc.h>
 #include <linux/seq_file.h>
 
+#include "internal.h"          /* mm-internal helpers, already in mm/ */
+#include <linux/pagewalk.h>     /* mm_walk_ops, walk_page_range      */
+
+#include <linux/cgroup.h>       /* css_for_each_descendant_pre,
+                                   css_task_iter_start/next/end            */
+#include <linux/sched/mm.h>     /* get_task_mm(), mmput()                  */
+#include <linux/mm.h>           /* mm_struct, mmap_read_lock/unlock        */
+
+
+
 
 /* ---------------------------------------------------------------------
  * definitions and Data structures
  * --------------------------------------------------------------------- */
 
- #define PAGE_WALK_INTERVAL_MS 30000 
+ #define PAGE_WALK_INTERVAL_MS 30000
 
 struct mpc_endpoint {
 	atomic_t depth_bins[DEPTH_NR_BINS];
@@ -229,7 +239,7 @@ int mpc_seq_show(struct seq_file *m, struct mpc_endpoint *mpc)
  * --------------------------------------------------------------------- */
 
 //callback for pte -- I try to follow the same workflow as lru_gen_look_around in vmscan.c.
-static void page_logger_pte_entry(pte_t *pte, unsigned long addr,
+static int page_logger_pte_entry(pte_t *pte, unsigned long addr,
                                  unsigned long next, struct mm_walk *walk)
 {
     struct folio *folio;
@@ -237,13 +247,14 @@ static void page_logger_pte_entry(pte_t *pte, unsigned long addr,
     struct lruvec *lruvec;
     struct vm_area_struct *vma = walk->vma;
     pte_t ptent = ptep_get(pte);
+    unsigned long max_seq;
     int old_gen, new_gen;
 
     //check if the young bit is set, otherwise do nothing
     if (!pte_present(ptent))
-        return;
+        return 0;
     if (!pte_young(ptent))
-		return;
+		return 0;
 
     folio = vm_normal_folio(vma, addr, ptent);
 	if (!folio)
@@ -260,7 +271,8 @@ static void page_logger_pte_entry(pte_t *pte, unsigned long addr,
     //I am trying to copy the folio activation workflow from lru_gen_look_around in vmscan.c here
     lruvec = folio_lruvec(folio);
     old_gen = folio_lru_gen(folio);
-    DEFINE_MAX_SEQ(lruvec);
+    //DEFINE_MAX_SEQ is local to vmscan.c, so read max_seq directly
+    max_seq = READ_ONCE(lruvec->lrugen.max_seq);
 	new_gen = lru_gen_from_seq(max_seq);
 
     if (old_gen >= 0)
@@ -276,6 +288,8 @@ static void page_logger_pte_entry(pte_t *pte, unsigned long addr,
 		folio_set_referenced(folio);
 	else if (old_gen != new_gen)
 		folio_activate(folio);
+
+    return 0;
 }
 
 

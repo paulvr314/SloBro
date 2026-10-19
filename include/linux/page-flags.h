@@ -479,7 +479,7 @@ PAGEFLAG(Active, active, PF_HEAD) __CLEARPAGEFLAG(Active, active, PF_HEAD)
 	TESTCLEARFLAG(Active, active, PF_HEAD)
 PAGEFLAG(Workingset, workingset, PF_HEAD)
 	TESTCLEARFLAG(Workingset, workingset, PF_HEAD)
-PAGEFLAG(Counted, counted, PF_NO_HEAD)         /*paul*/
+PAGEFLAG(Counted, counted, PF_HEAD)         /*paul*/
 	TESTSETFLAG(Counted, counted, PF_HEAD)
 	TESTCLEARFLAG(Counted, counted, PF_HEAD)
 __PAGEFLAG(Slab, slab, PF_NO_TAIL)

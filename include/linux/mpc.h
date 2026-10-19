@@ -51,12 +51,11 @@ void mpc_set_page_counted(struct folio *folio);
 /* Case 4: first-time access (folio just assigned its first generation) */
 void mpc_hook_first_access(struct folio *folio);
 
-/* Case 1: in-memory re-access; old_gen/new_gen bound the generation
- * range needed for the depth calculation (younger gens + half own gen).
+/* Case 1: in-memory re-access; old_gen is the generation the folio was
+ * accessed from (younger gens + half own gen gives the depth).
  */
-void mpc_hook_from_gen(struct folio *folio, unsigned long old_gen,
-			unsigned long new_gen, struct lru_gen_folio *lrugen,
-			struct mem_cgroup *memcg);
+void mpc_hook_from_gen(struct folio *folio, struct lru_gen_folio *lrugen,
+			struct mem_cgroup *memcg, int old_gen);
 
 /* Case 2: working-set (fast) refault */
 void mpc_hook_ws_refault(struct folio *folio, struct lru_gen_folio *lrugen);
