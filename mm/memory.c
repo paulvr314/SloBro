@@ -3155,6 +3155,8 @@ static vm_fault_t wp_page_copy(struct vm_fault *vmf)
 		BUG_ON(unshare && pte_write(entry));
 
 		//paul hook point for a duplicate page
+		//this probably won't fire in simple tests, but for processes
+		//with a lot of forks, it will fire a lot.
 		mpc_hook_first_access(new_folio);
 
 		set_pte_at_notify(mm, vmf->address, vmf->pte, entry);

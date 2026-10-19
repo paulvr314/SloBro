@@ -303,6 +303,10 @@ static void lru_gen_refault(struct folio *folio, void *shadow)
 	//note that this code is only meant to be run with mglru.
 	folio_set_active(folio);
 
+	//going to leave these here now for speed purposes,
+	//but this could potentially go into the swapin
+	//path instead.
+
 	if (!recent) {
 		//paul hook for slow refault
 		mpc_hook_slow_refault(folio, lrugen);
