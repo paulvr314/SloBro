@@ -497,6 +497,9 @@ struct page *__read_swap_cache_async(swp_entry_t entry, gfp_t gfp_mask,
 	if (shadow)
 		workingset_refault(folio, shadow);
 
+	/* paul: real swap-in; counted by do_swap_page() when mapped */
+	folio_set_mpc_swapin(folio);
+
 	/* Caller will initiate read into locked folio */
 	folio_add_lru(folio);
 	*new_page_allocated = true;

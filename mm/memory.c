@@ -4022,6 +4022,15 @@ vm_fault_t do_swap_page(struct vm_fault *vmf)
 	set_pte_at(vma->vm_mm, vmf->address, vmf->pte, pte);
 	arch_do_swap_page(vma->vm_mm, vma, vmf->address, pte, vmf->orig_pte);
 
+	/*
+	 * paul: count a refault only if the folio actually came from swap.
+	 * !swapcache: SWP_SYNCHRONOUS_IO path, always a fresh read.
+	 * Otherwise check swapcache, not folio: KSM may have swapped in a copy.
+	 * Swap-cache hits on folios reclaim never freed have no flag: not counted.
+	 */
+	if (!swapcache || folio_test_clear_mpc_swapin(swapcache))
+		mpc_hook_slow_refault(folio);
+
 	folio_unlock(folio);
 	if (folio != swapcache && swapcache) {
 		/*

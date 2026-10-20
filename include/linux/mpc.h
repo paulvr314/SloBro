@@ -42,7 +42,7 @@ void mpc_set_page_counted(struct folio *folio);
  * Access-recording hooks
  *
  * These are called from the various MGLRU access/refault paths
- * (mm_inline.h, workingset.c) to record a page-access depth sample.
+ * (memory.c, vmscan.c, mpc.c) to record a page-access depth sample.
  * Each hook internally checks mpc_should_track() (anon-only, mpc
  * enabled) before doing any real work, so callers do not need to
  * pre-filter -- just call unconditionally at the relevant hook site.
@@ -57,11 +57,8 @@ void mpc_hook_first_access(struct folio *folio);
 void mpc_hook_from_gen(struct folio *folio, struct lru_gen_folio *lrugen,
 			struct mem_cgroup *memcg, int old_gen);
 
-/* Case 2: working-set (fast) refault */
-void mpc_hook_ws_refault(struct folio *folio, struct lru_gen_folio *lrugen);
-
-/* Case 3: slow refault (from swap) */
-void mpc_hook_slow_refault(struct folio *folio, struct lru_gen_folio *lrugen);
+/* Case 2: refault -- a swapped-out page was accessed and mapped back in */
+void mpc_hook_slow_refault(struct folio *folio);
 
 /* Display MPC metrics in cgroup seq_file */
 int mpc_seq_show(struct seq_file *m, struct mpc_endpoint *mpc);

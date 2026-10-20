@@ -17,8 +17,6 @@
 #include <linux/fs.h>
 #include <linux/mm.h>
 
-#include <linux/mpc.h>
-
 /*
  *		Double CLOCK lists
  *
@@ -297,24 +295,10 @@ static void lru_gen_refault(struct folio *folio, void *shadow)
 
 	mod_lruvec_state(lruvec, WORKINGSET_REFAULT_BASE + type, delta);
 
-	lrugen = &lruvec->lrugen;
-
-	//set active flag in folio to prevent double counting of page accesses
-	//note that this code is only meant to be run with mglru.
-	folio_set_active(folio);
-
-	//going to leave these here now for speed purposes,
-	//but this could potentially go into the swapin
-	//path instead.
-
-	if (!recent) {
-		//paul hook for slow refault
-		mpc_hook_slow_refault(folio, lrugen);
+	if (!recent)
 		goto unlock;
-	}
 
-	// hook for working set refault
-	mpc_hook_ws_refault(folio, lrugen);
+	lrugen = &lruvec->lrugen;
 
 	hist = lru_hist_from_seq(READ_ONCE(lrugen->min_seq[type]));
 	/* see the comment in folio_lru_refs() */

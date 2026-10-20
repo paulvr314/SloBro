@@ -137,6 +137,7 @@ enum pageflags {
 	PG_arch_3,
 #endif
 	PG_counted,         /*paul*/
+	PG_mpc_swapin,      /*paul: filled from swap, not yet mapped by a fault */
 	__NR_PAGEFLAGS,
 
 	PG_readahead = PG_reclaim,
@@ -482,6 +483,8 @@ PAGEFLAG(Workingset, workingset, PF_HEAD)
 PAGEFLAG(Counted, counted, PF_HEAD)         /*paul*/
 	TESTSETFLAG(Counted, counted, PF_HEAD)
 	TESTCLEARFLAG(Counted, counted, PF_HEAD)
+PAGEFLAG(MpcSwapin, mpc_swapin, PF_HEAD)    /*paul*/
+	TESTCLEARFLAG(MpcSwapin, mpc_swapin, PF_HEAD)
 __PAGEFLAG(Slab, slab, PF_NO_TAIL)
 PAGEFLAG(Checked, checked, PF_NO_COMPOUND)	   /* Used by some filesystems */
 
