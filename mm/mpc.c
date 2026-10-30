@@ -30,6 +30,7 @@
                                    css_task_iter_start/next/end            */
 #include <linux/sched/mm.h>     /* get_task_mm(), mmput()                  */
 #include <linux/mm.h>           /* mm_struct, mmap_read_lock/unlock        */
+#include <linux/mutex.h>
 
 
 
@@ -44,8 +45,10 @@ struct mpc_endpoint {
 	atomic_t depth_bins[DEPTH_NR_BINS];
 	u32 binwidth;
 	u32 max_depth_bin;
-	bool enabled;
-    struct task_struct *thread;
+	bool enabled;               /* toggled via memory.mpc_enabled, off by default */
+    struct task_struct *thread; /* only running while enabled */
+    struct mem_cgroup *memcg;   /* owning cgroup, passed to the thread */
+    struct mutex lock;          /* serializes enable/disable */
 };
 
 /* ---------------------------------------------------------------------
@@ -115,7 +118,7 @@ static inline bool mpc_should_track(struct folio *folio, struct mem_cgroup *memc
 {
     if (folio_is_file_lru(folio))
         return false;
-    if (!memcg || !memcg->mpc || !memcg->mpc->enabled)
+    if (!memcg || !memcg->mpc || !READ_ONCE(memcg->mpc->enabled))
         return false;
     return true;
 }
@@ -136,7 +139,7 @@ static void record_depth(struct mpc_endpoint *mpc, u32 depth)
 {
 	u32 bin;
 
-	if (!mpc->enabled)
+	if (!READ_ONCE(mpc->enabled))
 		return;
 
 	bin = depth / mpc->binwidth;
@@ -333,7 +336,11 @@ static int mpc_thread_fn(void *data)
     pr_info("new cgroup created -- page logging thread started\n");
 
     while (!kthread_should_stop()) {
-        msleep_interruptible(PAGE_WALK_INTERVAL_MS);
+        //schedule_timeout (unlike msleep) returns early when kthread_stop wakes us,
+        //so turning tracking off doesn't block for a full interval
+        schedule_timeout_interruptible(msecs_to_jiffies(PAGE_WALK_INTERVAL_MS));
+        if (kthread_should_stop())
+            break;
         scan_memcg(memcg);
     }
 
@@ -357,12 +364,50 @@ static int mpc_thread_fn(void *data)
 
 	mpc->max_depth_bin = DEPTH_NR_BINS - 1;
     mpc->binwidth = MPC_MAX_DEPTH / DEPTH_NR_BINS;
-	mpc->enabled = true;
-
-    mpc->thread = kthread_run(mpc_thread_fn, memcg, "mpc_thread");
+	mpc->enabled = false;   //tracking starts when memory.mpc_enabled is set
+    mpc->memcg = memcg;
+    mutex_init(&mpc->lock);
 
 	return mpc;
  }
+
+bool mpc_is_enabled(struct mpc_endpoint *mpc)
+{
+    return mpc && READ_ONCE(mpc->enabled);
+}
+
+//turning tracking on clears the bins so every run starts from zero
+int mpc_set_enabled(struct mpc_endpoint *mpc, bool enable)
+{
+    struct task_struct *thread;
+    int ret = 0;
+
+    mutex_lock(&mpc->lock);
+
+    if (enable == mpc->enabled)
+        goto out;
+
+    if (enable) {
+        for (int i = 0; i < DEPTH_NR_BINS; i++)
+            atomic_set(&mpc->depth_bins[i], 0);
+
+        thread = kthread_run(mpc_thread_fn, mpc->memcg, "mpc_thread");
+        if (IS_ERR(thread)) {
+            ret = PTR_ERR(thread);
+            goto out;
+        }
+        mpc->thread = thread;
+        WRITE_ONCE(mpc->enabled, true);
+    } else {
+        WRITE_ONCE(mpc->enabled, false);
+        kthread_stop(mpc->thread);
+        mpc->thread = NULL;
+    }
+
+out:
+    mutex_unlock(&mpc->lock);
+    return ret;
+}
 
 void mpc_endpoint_free(struct mpc_endpoint *mpc)
 {

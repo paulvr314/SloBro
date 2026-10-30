@@ -63,6 +63,12 @@ void mpc_hook_slow_refault(struct folio *folio);
 /* Display MPC metrics in cgroup seq_file */
 int mpc_seq_show(struct seq_file *m, struct mpc_endpoint *mpc);
 
+/* memory.mpc_enabled switch. Tracking is off by default; turning it on
+ * clears the bins and starts the page walk thread, turning it off stops it.
+ */
+bool mpc_is_enabled(struct mpc_endpoint *mpc);
+int mpc_set_enabled(struct mpc_endpoint *mpc, bool enable);
+
 //use for testing
 void mpc_log_skip(struct folio *folio);
 

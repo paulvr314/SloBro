@@ -6634,6 +6634,27 @@ static int memory_cgroup_mpc_show(struct seq_file *sf, void *v)
 	return mpc_seq_show(sf, memcg->mpc);
 }
 
+//paul mpc on/off switch -- write 1 to start tracking, 0 to stop
+static u64 memory_mpc_enabled_read(struct cgroup_subsys_state *css,
+				   struct cftype *cft)
+{
+	return mpc_is_enabled(mem_cgroup_from_css(css)->mpc);
+}
+
+static int memory_mpc_enabled_write(struct cgroup_subsys_state *css,
+				    struct cftype *cft, u64 val)
+{
+	struct mem_cgroup *memcg = mem_cgroup_from_css(css);
+
+	//no endpoint if MGLRU was off when the cgroup was created
+	if (!memcg->mpc)
+		return -EOPNOTSUPP;
+	if (val > 1)
+		return -EINVAL;
+
+	return mpc_set_enabled(memcg->mpc, val);
+}
+
 
 #ifdef CONFIG_NUMA
 static inline unsigned long lruvec_page_state_output(struct lruvec *lruvec,
@@ -6817,6 +6838,12 @@ static struct cftype memory_files[] = {
 		.name = "mpc",
 		.flags = CFTYPE_NOT_ON_ROOT,
 		.seq_show = memory_cgroup_mpc_show,
+	},
+	{
+		.name = "mpc_enabled",
+		.flags = CFTYPE_NOT_ON_ROOT,
+		.read_u64 = memory_mpc_enabled_read,
+		.write_u64 = memory_mpc_enabled_write,
 	},
 	{ }	/* terminate */
 };
