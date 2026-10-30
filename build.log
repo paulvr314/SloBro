@@ -3,9 +3,53 @@
   INSTALL libsubcmd_headers
   INSTALL libsubcmd_headers
   CALL    scripts/checksyscalls.sh
-  CC      mm/mpc.o
+  CC      fs/splice.o
+  CC      kernel/fork.o
+  CC      mm/page-writeback.o
+  CC      mm/readahead.o
+  CC      mm/swap.o
+  CC      mm/vmscan.o
+  CC      mm/vmstat.o
+  CC      mm/compaction.o
+  CC      kernel/sys.o
+  CC      mm/workingset.o
+  CC [M]  drivers/block/drbd/drbd_worker.o
+  CC      mm/gup.o
+  CC [M]  drivers/block/drbd/drbd_receiver.o
+  CC      fs/mpage.o
+  CC      mm/memory.o
+  CC      mm/mlock.o
+  CC [M]  drivers/block/drbd/drbd_main.o
+  CC      mm/mmap.o
+  CC      mm/mmu_gather.o
+  CC      mm/mprotect.o
+  CC      mm/mremap.o
+  CC      fs/userfaultfd.o
+  CC      mm/pgtable-generic.o
+  CC      mm/rmap.o
+  CC      mm/page_alloc.o
+  CC      mm/memory_hotplug.o
+  CC      mm/madvise.o
+  CC      fs/proc/task_mmu.o
+  CC      mm/hugetlb.o
+  CC      mm/mempolicy.o
+  CC      mm/ksm.o
+  CC      mm/migrate.o
+  CC      mm/migrate_device.o
   CHK     kernel/kheaders_data.tar.xz
+  CC      mm/huge_memory.o
+  CC      mm/khugepaged.o
+  CC      mm/memcontrol.o
+  GEN     kernel/kheaders_data.tar.xz
+  CC      mm/mpc.o
+  LD [M]  drivers/block/drbd/drbd.o
+  CC      mm/memory-failure.o
+  CC      mm/mapping_dirty_helpers.o
+  AR      fs/proc/built-in.a
+  AR      fs/built-in.a
   AR      mm/built-in.a
+  AR      kernel/built-in.a
+  CC [M]  kernel/kheaders.o
   AR      built-in.a
   AR      vmlinux.a
   LD      vmlinux.o
@@ -75,7 +119,7 @@
   BTF [M] arch/x86/kvm/kvm.ko
   BTF [M] arch/x86/kvm/kvm-intel.ko
   BTF [M] arch/x86/kvm/kvm-amd.ko
-  BTF [M] kernel/kheaders.ko
+  LD [M]  kernel/kheaders.ko
   BTF [M] mm/hwpoison-inject.ko
   BTF [M] mm/z3fold.ko
   BTF [M] fs/nfs_common/nfs_acl.ko
@@ -86,6 +130,7 @@
   BTF [M] fs/fat/msdos.ko
   BTF [M] fs/nls/nls_cp737.ko
   BTF [M] fs/nls/nls_cp775.ko
+  BTF [M] kernel/kheaders.ko
   BTF [M] fs/nls/nls_cp850.ko
   BTF [M] fs/nls/nls_cp852.ko
   BTF [M] fs/nls/nls_cp855.ko
@@ -822,7 +867,7 @@
   BTF [M] drivers/block/nbd.ko
   BTF [M] drivers/block/virtio_blk.ko
   BTF [M] drivers/block/xen-blkback/xen-blkback.ko
-  BTF [M] drivers/block/drbd/drbd.ko
+  LD [M]  drivers/block/drbd/drbd.ko
   BTF [M] drivers/block/rbd.ko
   BTF [M] drivers/block/mtip32xx/mtip32xx.ko
   BTF [M] drivers/block/zram/zram.ko
@@ -833,6 +878,7 @@
   BTF [M] drivers/misc/eeprom/max6875.ko
   BTF [M] drivers/misc/eeprom/eeprom_93cx6.ko
   BTF [M] drivers/misc/eeprom/eeprom_93xx46.ko
+  BTF [M] drivers/block/drbd/drbd.ko
   BTF [M] drivers/misc/eeprom/idt_89hpesx.ko
   BTF [M] drivers/misc/eeprom/ee1004.ko
   BTF [M] drivers/misc/cb710/cb710.ko
@@ -877,8 +923,8 @@
   BTF [M] drivers/misc/mei/mei-txe.ko
   BTF [M] drivers/misc/mei/hdcp/mei_hdcp.ko
   BTF [M] drivers/misc/vmw_vmci/vmw_vmci.ko
-  BTF [M] drivers/misc/lattice-ecp3-config.ko
   BTF [M] drivers/misc/genwqe/genwqe_card.ko
+  BTF [M] drivers/misc/lattice-ecp3-config.ko
   BTF [M] drivers/misc/echo/echo.ko
   BTF [M] drivers/misc/dw-xdata-pcie.ko
   BTF [M] drivers/misc/bcm-vk/bcm_vk.ko
@@ -1411,8 +1457,8 @@
   BTF [M] drivers/net/ethernet/jme.ko
   BTF [M] drivers/net/ethernet/fealnx.ko
   BTF [M] drivers/net/ethernet/ethoc.ko
-  BTF [M] drivers/net/fddi/defxx.ko
   BTF [M] drivers/net/fddi/skfp/skfp.ko
+  BTF [M] drivers/net/fddi/defxx.ko
   BTF [M] drivers/net/hamradio/mkiss.ko
   BTF [M] drivers/net/hamradio/6pack.ko
   BTF [M] drivers/net/hamradio/yam.ko
@@ -1499,8 +1545,8 @@
   BTF [M] drivers/net/wireless/intersil/orinoco/spectrum_cs.ko
   BTF [M] drivers/net/wireless/intersil/orinoco/orinoco_usb.ko
   BTF [M] drivers/net/wireless/intersil/p54/p54common.ko
-  BTF [M] drivers/net/wireless/intersil/p54/p54usb.ko
   BTF [M] drivers/net/wireless/intersil/p54/p54pci.ko
+  BTF [M] drivers/net/wireless/intersil/p54/p54usb.ko
   BTF [M] drivers/net/wireless/intersil/p54/p54spi.ko
   BTF [M] drivers/net/wireless/marvell/libertas/libertas.ko
   BTF [M] drivers/net/wireless/marvell/libertas/usb8xxx.ko
@@ -1591,8 +1637,8 @@
   BTF [M] drivers/net/wireless/rsi/rsi_sdio.ko
   BTF [M] drivers/net/wireless/rsi/rsi_usb.ko
   BTF [M] drivers/net/wireless/silabs/wfx/wfx.ko
-  BTF [M] drivers/net/wireless/st/cw1200/cw1200_wlan_sdio.ko
   BTF [M] drivers/net/wireless/st/cw1200/cw1200_core.ko
+  BTF [M] drivers/net/wireless/st/cw1200/cw1200_wlan_sdio.ko
   BTF [M] drivers/net/wireless/st/cw1200/cw1200_wlan_spi.ko
   BTF [M] drivers/net/wireless/ti/wlcore/wlcore.ko
   BTF [M] drivers/net/wireless/ti/wlcore/wlcore_sdio.ko
@@ -2385,8 +2431,6 @@
   BTF [M] drivers/i2c/busses/i2c-xiic.ko
   BTF [M] drivers/i2c/busses/i2c-diolan-u2c.ko
   BTF [M] drivers/i2c/busses/i2c-dln2.ko
-  MKPIGGY arch/x86/boot/compressed/piggy.S
-  AS      arch/x86/boot/compressed/piggy.o
   BTF [M] drivers/i2c/busses/i2c-cp2615.ko
   BTF [M] drivers/i2c/busses/i2c-parport.ko
   BTF [M] drivers/i2c/busses/i2c-robotfuzz-osif.ko
@@ -2409,7 +2453,6 @@
   BTF [M] drivers/i3c/master/i3c-master-cdns.ko
   BTF [M] drivers/i3c/master/dw-i3c-master.ko
   BTF [M] drivers/i3c/master/svc-i3c-master.ko
-  LD      arch/x86/boot/compressed/vmlinux
   BTF [M] drivers/i3c/master/mipi-i3c-hci/mipi-i3c-hci.ko
   BTF [M] drivers/media/i2c/max2175.ko
   BTF [M] drivers/media/i2c/ad5820.ko
@@ -2417,10 +2460,7 @@
   BTF [M] drivers/media/i2c/adv7170.ko
   BTF [M] drivers/media/i2c/adv7175.ko
   BTF [M] drivers/media/i2c/adv7180.ko
-  ZOFFSET arch/x86/boot/zoffset.h
   BTF [M] drivers/media/i2c/adv7183.ko
-  OBJCOPY arch/x86/boot/vmlinux.bin
-  AS      arch/x86/boot/header.o
   BTF [M] drivers/media/i2c/adv7343.ko
   BTF [M] drivers/media/i2c/adv7393.ko
   BTF [M] drivers/media/i2c/adv7511-v4l2.ko
@@ -2433,12 +2473,9 @@
   BTF [M] drivers/media/i2c/bt856.ko
   BTF [M] drivers/media/i2c/bt866.ko
   BTF [M] drivers/media/i2c/ccs/ccs.ko
-  LD      arch/x86/boot/setup.elf
   BTF [M] drivers/media/i2c/ccs-pll.ko
   BTF [M] drivers/media/i2c/cs3308.ko
-  OBJCOPY arch/x86/boot/setup.bin
   BTF [M] drivers/media/i2c/cs5345.ko
-  BUILD   arch/x86/boot/bzImage
   BTF [M] drivers/media/i2c/cs53l32a.ko
   BTF [M] drivers/media/i2c/cx25840/cx25840.ko
   BTF [M] drivers/media/i2c/dw9714.ko
@@ -2450,7 +2487,6 @@
   BTF [M] drivers/media/i2c/imx208.ko
   BTF [M] drivers/media/i2c/imx214.ko
   BTF [M] drivers/media/i2c/imx219.ko
-Kernel: arch/x86/boot/bzImage is ready  (#30)
   BTF [M] drivers/media/i2c/imx258.ko
   BTF [M] drivers/media/i2c/imx274.ko
   BTF [M] drivers/media/i2c/imx290.ko
@@ -2573,7 +2609,9 @@ Kernel: arch/x86/boot/bzImage is ready  (#30)
   BTF [M] drivers/media/tuners/xc4000.ko
   BTF [M] drivers/media/tuners/xc5000.ko
   BTF [M] drivers/media/rc/keymaps/rc-adstech-dvb-t-pci.ko
+  MKPIGGY arch/x86/boot/compressed/piggy.S
   BTF [M] drivers/media/rc/keymaps/rc-alink-dtu-m.ko
+  AS      arch/x86/boot/compressed/piggy.o
   BTF [M] drivers/media/rc/keymaps/rc-anysee.ko
   BTF [M] drivers/media/rc/keymaps/rc-apac-viewcomp.ko
   BTF [M] drivers/media/rc/keymaps/rc-astrometa-t2hybrid.ko
@@ -2587,14 +2625,18 @@ Kernel: arch/x86/boot/bzImage is ready  (#30)
   BTF [M] drivers/media/rc/keymaps/rc-avermedia-m135a.ko
   BTF [M] drivers/media/rc/keymaps/rc-avermedia-m733a-rm-k6.ko
   BTF [M] drivers/media/rc/keymaps/rc-avermedia.ko
+  LD      arch/x86/boot/compressed/vmlinux
   BTF [M] drivers/media/rc/keymaps/rc-avermedia-rm-ks.ko
   BTF [M] drivers/media/rc/keymaps/rc-avertv-303.ko
+  ZOFFSET arch/x86/boot/zoffset.h
+  OBJCOPY arch/x86/boot/vmlinux.bin
   BTF [M] drivers/media/rc/keymaps/rc-azurewave-ad-tu700.ko
   BTF [M] drivers/media/rc/keymaps/rc-beelink-gs1.ko
   BTF [M] drivers/media/rc/keymaps/rc-beelink-mxiii.ko
   BTF [M] drivers/media/rc/keymaps/rc-behold-columbus.ko
   BTF [M] drivers/media/rc/keymaps/rc-behold.ko
   BTF [M] drivers/media/rc/keymaps/rc-budget-ci-old.ko
+  AS      arch/x86/boot/header.o
   BTF [M] drivers/media/rc/keymaps/rc-cinergy-1400.ko
   BTF [M] drivers/media/rc/keymaps/rc-cinergy.ko
   BTF [M] drivers/media/rc/keymaps/rc-ct-90405.ko
@@ -2606,10 +2648,13 @@ Kernel: arch/x86/boot/bzImage is ready  (#30)
   BTF [M] drivers/media/rc/keymaps/rc-digittrade.ko
   BTF [M] drivers/media/rc/keymaps/rc-dm1105-nec.ko
   BTF [M] drivers/media/rc/keymaps/rc-dntv-live-dvb-t.ko
+  LD      arch/x86/boot/setup.elf
   BTF [M] drivers/media/rc/keymaps/rc-dntv-live-dvbt-pro.ko
   BTF [M] drivers/media/rc/keymaps/rc-dreambox.ko
   BTF [M] drivers/media/rc/keymaps/rc-dtt200u.ko
+  OBJCOPY arch/x86/boot/setup.bin
   BTF [M] drivers/media/rc/keymaps/rc-dvbsky.ko
+  BUILD   arch/x86/boot/bzImage
   BTF [M] drivers/media/rc/keymaps/rc-dvico-mce.ko
   BTF [M] drivers/media/rc/keymaps/rc-dvico-portable.ko
   BTF [M] drivers/media/rc/keymaps/rc-em-terratec.ko
@@ -2619,6 +2664,7 @@ Kernel: arch/x86/boot/bzImage is ready  (#30)
   BTF [M] drivers/media/rc/keymaps/rc-evga-indtube.ko
   BTF [M] drivers/media/rc/keymaps/rc-eztv.ko
   BTF [M] drivers/media/rc/keymaps/rc-flydvb.ko
+Kernel: arch/x86/boot/bzImage is ready  (#34)
   BTF [M] drivers/media/rc/keymaps/rc-flyvideo.ko
   BTF [M] drivers/media/rc/keymaps/rc-fusionhdtv-mce.ko
   BTF [M] drivers/media/rc/keymaps/rc-gadmei-rm008z.ko
@@ -2669,8 +2715,8 @@ Kernel: arch/x86/boot/bzImage is ready  (#30)
   BTF [M] drivers/media/rc/keymaps/rc-pixelview.ko
   BTF [M] drivers/media/rc/keymaps/rc-powercolor-real-angel.ko
   BTF [M] drivers/media/rc/keymaps/rc-proteus-2309.ko
-  BTF [M] drivers/media/rc/keymaps/rc-pv951.ko
   BTF [M] drivers/media/rc/keymaps/rc-purpletv.ko
+  BTF [M] drivers/media/rc/keymaps/rc-pv951.ko
   BTF [M] drivers/media/rc/keymaps/rc-rc6-mce.ko
   BTF [M] drivers/media/rc/keymaps/rc-real-audio-220-32-keys.ko
   BTF [M] drivers/media/rc/keymaps/rc-reddo.ko
@@ -5112,8 +5158,8 @@ Kernel: arch/x86/boot/bzImage is ready  (#30)
   BTF [M] sound/soc/codecs/snd-soc-cs35l41-i2c.ko
   BTF [M] sound/soc/codecs/snd-soc-cs35l56.ko
   BTF [M] sound/soc/codecs/snd-soc-cs35l56-shared.ko
-  BTF [M] sound/soc/codecs/snd-soc-cs42l42.ko
   BTF [M] sound/soc/codecs/snd-soc-cs35l56-sdw.ko
+  BTF [M] sound/soc/codecs/snd-soc-cs42l42.ko
   BTF [M] sound/soc/codecs/snd-soc-cs42l42-i2c.ko
   BTF [M] sound/soc/codecs/snd-soc-cs42l42-sdw.ko
   BTF [M] sound/soc/codecs/snd-soc-cs42l51.ko
@@ -5712,8 +5758,8 @@ Kernel: arch/x86/boot/bzImage is ready  (#30)
   BTF [M] net/ipv4/gre.ko
   BTF [M] net/ipv4/ip_gre.ko
   BTF [M] net/ipv4/udp_tunnel.ko
-  BTF [M] net/ipv4/ah4.ko
   BTF [M] net/ipv4/ip_vti.ko
+  BTF [M] net/ipv4/ah4.ko
   BTF [M] net/ipv4/esp4.ko
   BTF [M] net/ipv4/esp4_offload.ko
   BTF [M] net/ipv4/ipcomp.ko
@@ -5928,8 +5974,8 @@ Kernel: arch/x86/boot/bzImage is ready  (#30)
   BTF [M] net/nfc/hci/hci.ko
   BTF [M] net/nfc/nfc_digital.ko
   BTF [M] net/psample/psample.ko
-  BTF [M] net/ife/ife.ko
   BTF [M] net/openvswitch/openvswitch.ko
+  BTF [M] net/ife/ife.ko
   BTF [M] net/openvswitch/vport-vxlan.ko
   BTF [M] net/openvswitch/vport-geneve.ko
   BTF [M] net/openvswitch/vport-gre.ko
@@ -5940,8 +5986,8 @@ Kernel: arch/x86/boot/bzImage is ready  (#30)
   BTF [M] net/vmw_vsock/vmw_vsock_virtio_transport_common.ko
   BTF [M] net/vmw_vsock/hv_sock.ko
   BTF [M] net/vmw_vsock/vsock_loopback.ko
-  BTF [M] net/nsh/nsh.ko
   BTF [M] net/hsr/hsr.ko
+  BTF [M] net/nsh/nsh.ko
   BTF [M] net/qrtr/qrtr.ko
   BTF [M] net/qrtr/qrtr-smd.ko
   BTF [M] net/qrtr/qrtr-tun.ko

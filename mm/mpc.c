@@ -38,7 +38,7 @@
  * definitions and Data structures
  * --------------------------------------------------------------------- */
 
- #define PAGE_WALK_INTERVAL_MS 30000
+ #define PAGE_WALK_INTERVAL_MS 5000
 
 struct mpc_endpoint {
 	atomic_t depth_bins[DEPTH_NR_BINS];
