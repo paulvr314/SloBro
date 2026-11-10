@@ -17,7 +17,7 @@
 #define _MPC_H
 
 #define DEPTH_NR_BINS         1000
-#define MPC_MAX_DEPTH         200000
+#define MPC_MAX_DEPTH         10000000
 
 /* Forward declarations only -- these types are used exclusively as
  * pointers in this header, so we never need their full definitions

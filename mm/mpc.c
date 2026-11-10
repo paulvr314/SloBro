@@ -39,7 +39,9 @@
  * definitions and Data structures
  * --------------------------------------------------------------------- */
 
- #define PAGE_WALK_INTERVAL_MS 5000
+ //TODO make this controllable via a cgroup file
+ #define PAGE_WALK_INTERVAL_MS 10000
+ #define PROMOTION_INTERVAL_THRESHOLD_MS 1000
 
 struct mpc_endpoint {
 	atomic_t depth_bins[DEPTH_NR_BINS];
@@ -49,6 +51,18 @@ struct mpc_endpoint {
     struct task_struct *thread; /* only running while enabled */
     struct mem_cgroup *memcg;   /* owning cgroup, passed to the thread */
     struct mutex lock;          /* serializes enable/disable */
+
+    //global and per-timestamp counters to report promotion rate
+    atomic_t total_promotions;
+    atomic_t total_new_pages;
+    atomic_t total_in_mem_accesses;
+
+    atomic_t last_promotions;
+    atomic_t last_new_pages;
+    atomic_t last_in_mem_accesses;
+
+    //clock for the last timestamp
+    ktime_t last_timestamp;
 };
 
 /* ---------------------------------------------------------------------
@@ -129,7 +143,7 @@ inline bool mpc_page_already_counted(struct folio *folio)
     return folio_test_clear_counted(folio);
 }
 
-//called by all 3 out of mem accesses, plus other pathways in the kernel
+//called by all 3 out of mem accesses, TODO: check other pathways in the kernel?
 inline void mpc_set_page_counted(struct folio *folio)
 {
     folio_set_counted(folio);
@@ -154,7 +168,8 @@ void mpc_hook_first_access(struct folio *folio)
     struct mem_cgroup *memcg = folio_memcg(folio);
     if (mpc_should_track(folio, memcg)) {
         record_depth(memcg->mpc, 0);
-        atomic_inc(&memcg->mpc->depth_bins[memcg->mpc->max_depth_bin-4]);
+        atomic_inc(&memcg->mpc->total_new_pages);
+        atomic_inc(&memcg->mpc->last_new_pages);
 
         mpc_set_page_counted(folio);
     }
@@ -185,7 +200,8 @@ void mpc_hook_from_gen(struct folio *folio, struct lru_gen_folio *lrugen, struct
 
     record_depth(memcg->mpc, depth);
 
-    atomic_inc(&memcg->mpc->depth_bins[memcg->mpc->max_depth_bin-3]);
+    atomic_inc(&memcg->mpc->total_in_mem_accesses);
+    atomic_inc(&memcg->mpc->last_in_mem_accesses);
 }
 
 void mpc_hook_slow_refault(struct folio *folio)
@@ -204,7 +220,8 @@ void mpc_hook_slow_refault(struct folio *folio)
     depth +=(total_swap_pages - get_nr_swap_pages()) / 2;
     record_depth(memcg->mpc, depth);
 
-    atomic_inc(&memcg->mpc->depth_bins[memcg->mpc->max_depth_bin-1]);
+    atomic_inc(&memcg->mpc->total_promotions);
+    atomic_inc(&memcg->mpc->last_promotions);
 
     mpc_set_page_counted(folio);
 }
@@ -328,6 +345,27 @@ static void scan_memcg(struct mem_cgroup *memcg)
     css_task_iter_end(&it);
 }
 
+//checks if the timestamp is long enough to report something useful
+//if so, dumps time, new pages, in-mem accesses, and promotions to somewhrere useful (TODO where?)
+//resets the counters for the next interval
+static void report_page_stats(struct mem_cgroup *memcg)
+{
+    struct mpc_endpoint *mpc = memcg->mpc;
+    ktime_t now = ktime_get();
+    s64 delta_ms = ktime_to_ms(ktime_sub(now, mpc->last_timestamp));
+    mpc->last_timestamp = now;
+
+    //get promotion info
+    int promotions = atomic_xchg(&mpc->last_promotions, 0);
+    int new_pages = atomic_xchg(&mpc->last_new_pages, 0);
+    int in_mem_accesses = atomic_xchg(&mpc->last_in_mem_accesses, 0);
+
+    if (delta_ms < PROMOTION_INTERVAL_THRESHOLD_MS)
+        return;
+
+    //TODO: report to cgroup fs
+}
+
 //I decided to have one thread per cgroup to avoid going through every cgroup.
 static int mpc_thread_fn(void *data) 
 {
@@ -342,6 +380,7 @@ static int mpc_thread_fn(void *data)
         if (kthread_should_stop())
             break;
         scan_memcg(memcg);
+        report_page_stats(memcg);
     }
 
     pr_info("page_logger: thread stopping\n");
@@ -352,6 +391,19 @@ static int mpc_thread_fn(void *data)
 /* ---------------------------------------------------------------------
  * Init / teardown 
  * --------------------------------------------------------------------- */
+
+ static inline void reset_promotion_counters(struct mpc_endpoint *mpc)
+ {
+    atomic_set(&mpc->total_promotions, 0);
+    atomic_set(&mpc->total_new_pages, 0);
+    atomic_set(&mpc->total_in_mem_accesses, 0);
+
+    atomic_set(&mpc->last_promotions, 0);
+    atomic_set(&mpc->last_new_pages, 0);
+    atomic_set(&mpc->last_in_mem_accesses, 0);
+
+    mpc->last_timestamp = ktime_get();
+ }
 
  struct mpc_endpoint *mpc_endpoint_alloc(struct mem_cgroup *memcg)
  {
@@ -367,6 +419,8 @@ static int mpc_thread_fn(void *data)
 	mpc->enabled = false;   //tracking starts when memory.mpc_enabled is set
     mpc->memcg = memcg;
     mutex_init(&mpc->lock);
+
+    reset_promotion_counters(mpc);
 
 	return mpc;
  }
@@ -390,6 +444,8 @@ int mpc_set_enabled(struct mpc_endpoint *mpc, bool enable)
     if (enable) {
         for (int i = 0; i < DEPTH_NR_BINS; i++)
             atomic_set(&mpc->depth_bins[i], 0);
+
+        reset_promotion_counters(mpc);
 
         thread = kthread_run(mpc_thread_fn, mpc->memcg, "mpc_thread");
         if (IS_ERR(thread)) {
