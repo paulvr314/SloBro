@@ -149,6 +149,7 @@ inline void mpc_set_page_counted(struct folio *folio)
     folio_set_counted(folio);
 }
 
+
 static void record_depth(struct mpc_endpoint *mpc, u32 depth)
 {
 	u32 bin;
@@ -169,9 +170,13 @@ void mpc_hook_first_access(struct folio *folio)
     if (mpc_should_track(folio, memcg)) {
         record_depth(memcg->mpc, 0);
         atomic_inc(&memcg->mpc->total_new_pages);
-        atomic_inc(&memcg->mpc->last_new_pages);
 
         mpc_set_page_counted(folio);
+
+        //promotion rate tracking with unique pages
+        if (!folio_test_set_unique(folio)) {
+            
+        }
     }
 }
 
@@ -364,6 +369,7 @@ static void report_page_stats(struct mem_cgroup *memcg)
         return;
 
     //TODO: report to cgroup fs
+
 }
 
 //I decided to have one thread per cgroup to avoid going through every cgroup.
