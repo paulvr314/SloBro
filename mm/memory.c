@@ -3735,6 +3735,8 @@ vm_fault_t do_swap_page(struct vm_fault *vmf)
 	struct swap_info_struct *si = NULL;
 	rmap_t rmap_flags = RMAP_NONE;
 	bool exclusive = false;
+	bool has_mpc_swap_generation = false;
+	u32 mpc_swap_generation = 0;
 	swp_entry_t entry;
 	pte_t pte;
 	vm_fault_t ret = 0;
@@ -3974,6 +3976,9 @@ vm_fault_t do_swap_page(struct vm_fault *vmf)
 	 */
 	arch_swap_restore(entry, folio);
 
+	has_mpc_swap_generation =
+		swap_mpc_get_generation(si, entry, &mpc_swap_generation);
+
 	/*
 	 * Remove the swap entry and conditionally try to free up the swapcache.
 	 * We're already holding a reference on the page but haven't mapped it
@@ -4029,7 +4034,8 @@ vm_fault_t do_swap_page(struct vm_fault *vmf)
 	 * Swap-cache hits on folios reclaim never freed have no flag: not counted.
 	 */
 	if (!swapcache || folio_test_clear_mpc_swapin(swapcache))
-		mpc_hook_slow_refault(folio);
+		mpc_hook_slow_refault(folio, has_mpc_swap_generation,
+				      mpc_swap_generation);
 
 	folio_unlock(folio);
 	if (folio != swapcache && swapcache) {

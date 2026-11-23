@@ -11,6 +11,7 @@
 #include <linux/gfp.h>
 #include <linux/kernel_stat.h>
 #include <linux/swap.h>
+#include <linux/mpc.h>
 #include <linux/swapops.h>
 #include <linux/init.h>
 #include <linux/pagemap.h>
@@ -204,6 +205,9 @@ bool add_to_swap(struct folio *folio)
 		 * clear SWAP_HAS_CACHE flag.
 		 */
 		goto fail;
+
+	mpc_hook_swapout(folio);
+
 	/*
 	 * Normally the folio will be dirtied in unmap because its
 	 * pte should be dirty. A special case is MADV_FREE page. The

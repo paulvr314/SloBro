@@ -7,6 +7,7 @@
  */
 
 #include <linux/blkdev.h>
+#include <linux/bitmap.h>
 #include <linux/mm.h>
 #include <linux/sched/mm.h>
 #include <linux/sched/task.h>
@@ -914,6 +915,8 @@ checks:
 			goto done;
 	}
 	WRITE_ONCE(si->swap_map[offset], usage);
+	if (si->mpc_swap_generation_valid)
+		__clear_bit(offset, si->mpc_swap_generation_valid);
 	inc_cluster_info_page(si, si->cluster_info, offset);
 	unlock_cluster(ci);
 
@@ -1024,6 +1027,9 @@ static int swap_alloc_cluster(struct swap_info_struct *si, swp_entry_t *slot)
 	cluster_set_count_flag(ci, SWAPFILE_CLUSTER, CLUSTER_FLAG_HUGE);
 
 	memset(si->swap_map + offset, SWAP_HAS_CACHE, SWAPFILE_CLUSTER);
+	if (si->mpc_swap_generation_valid)
+		bitmap_clear(si->mpc_swap_generation_valid, offset,
+			     SWAPFILE_CLUSTER);
 	unlock_cluster(ci);
 	swap_range_alloc(si, offset, SWAPFILE_CLUSTER);
 	*slot = swp_entry(si->type, offset);
@@ -1286,6 +1292,65 @@ put_out:
 	pr_err("%s: %s%08lx\n", __func__, Bad_offset, entry.val);
 	percpu_ref_put(&si->users);
 	return NULL;
+}
+
+bool swap_mpc_set_generation(swp_entry_t entry, unsigned int nr_pages,
+			     u32 generation)
+{
+	struct swap_info_struct *si = get_swap_device(entry);
+	unsigned long offset = swp_offset(entry), i;
+	bool stored = false;
+
+	if (!si)
+		return false;
+
+	if (si->mpc_swap_generation && si->mpc_swap_generation_valid) {
+		stored = true;
+		for (i = 0; i < nr_pages; i++) {
+			struct swap_cluster_info *ci;
+
+			if (offset + i >= si->max) {
+				stored = false;
+				break;
+			}
+
+			ci = lock_cluster(si, offset + i);
+			if (si->swap_map[offset + i]) {
+				WRITE_ONCE(si->mpc_swap_generation[offset + i],
+					   generation);
+				__set_bit(offset + i,
+					  si->mpc_swap_generation_valid);
+			} else {
+				stored = false;
+			}
+			unlock_cluster_or_swap_info(si, ci);
+		}
+	}
+	put_swap_device(si);
+
+	return stored;
+}
+
+bool swap_mpc_get_generation(struct swap_info_struct *si, swp_entry_t entry,
+			     u32 *generation)
+{
+	struct swap_cluster_info *ci;
+	unsigned long offset = swp_offset(entry);
+	bool found = false;
+
+	if (!si || offset >= si->max || !si->mpc_swap_generation ||
+	    !si->mpc_swap_generation_valid)
+		return false;
+
+	ci = lock_cluster(si, offset);
+	if (si->swap_map[offset] &&
+	    test_bit(offset, si->mpc_swap_generation_valid)) {
+		*generation = READ_ONCE(si->mpc_swap_generation[offset]);
+		found = true;
+	}
+	unlock_cluster_or_swap_info(si, ci);
+
+	return found;
 }
 
 static unsigned char __swap_entry_free(struct swap_info_struct *p,
@@ -2389,6 +2454,8 @@ SYSCALL_DEFINE1(swapoff, const char __user *, specialfile)
 {
 	struct swap_info_struct *p = NULL;
 	unsigned char *swap_map;
+	u32 *mpc_swap_generation;
+	unsigned long *mpc_swap_generation_valid;
 	struct swap_cluster_info *cluster_info;
 	struct file *swap_file, *victim;
 	struct address_space *mapping;
@@ -2512,6 +2579,10 @@ SYSCALL_DEFINE1(swapoff, const char __user *, specialfile)
 	p->max = 0;
 	swap_map = p->swap_map;
 	p->swap_map = NULL;
+	mpc_swap_generation = p->mpc_swap_generation;
+	p->mpc_swap_generation = NULL;
+	mpc_swap_generation_valid = p->mpc_swap_generation_valid;
+	p->mpc_swap_generation_valid = NULL;
 	cluster_info = p->cluster_info;
 	p->cluster_info = NULL;
 	spin_unlock(&p->lock);
@@ -2524,6 +2595,8 @@ SYSCALL_DEFINE1(swapoff, const char __user *, specialfile)
 	free_percpu(p->cluster_next_cpu);
 	p->cluster_next_cpu = NULL;
 	vfree(swap_map);
+	kvfree(mpc_swap_generation);
+	bitmap_free(mpc_swap_generation_valid);
 	kvfree(cluster_info);
 	/* Destroy swap account information */
 	swap_cgroup_swapoff(p->type);
@@ -2989,6 +3062,8 @@ SYSCALL_DEFINE2(swapon, const char __user *, specialfile, int, swap_flags)
 	sector_t span;
 	unsigned long maxpages;
 	unsigned char *swap_map = NULL;
+	u32 *mpc_swap_generation = NULL;
+	unsigned long *mpc_swap_generation_valid = NULL;
 	struct swap_cluster_info *cluster_info = NULL;
 	struct page *page = NULL;
 	struct inode *inode = NULL;
@@ -3064,6 +3139,19 @@ SYSCALL_DEFINE2(swapon, const char __user *, specialfile, int, swap_flags)
 	/* OK, set up the swap map and apply the bad block list */
 	swap_map = vzalloc(maxpages);
 	if (!swap_map) {
+		error = -ENOMEM;
+		goto bad_swap_unlock_inode;
+	}
+
+	mpc_swap_generation = kvcalloc(maxpages,
+				       sizeof(*mpc_swap_generation), GFP_KERNEL);
+	if (!mpc_swap_generation) {
+		error = -ENOMEM;
+		goto bad_swap_unlock_inode;
+	}
+
+	mpc_swap_generation_valid = bitmap_zalloc(maxpages, GFP_KERNEL);
+	if (!mpc_swap_generation_valid) {
 		error = -ENOMEM;
 		goto bad_swap_unlock_inode;
 	}
@@ -3181,6 +3269,10 @@ SYSCALL_DEFINE2(swapon, const char __user *, specialfile, int, swap_flags)
 	if (swap_flags & SWAP_FLAG_PREFER)
 		prio =
 		  (swap_flags & SWAP_FLAG_PRIO_MASK) >> SWAP_FLAG_PRIO_SHIFT;
+	p->mpc_swap_generation = mpc_swap_generation;
+	p->mpc_swap_generation_valid = mpc_swap_generation_valid;
+	mpc_swap_generation = NULL;
+	mpc_swap_generation_valid = NULL;
 	enable_swap_info(p, prio, swap_map, cluster_info);
 
 	pr_info("Adding %uk swap on %s.  Priority:%d extents:%d across:%lluk %s%s%s%s\n",
@@ -3218,6 +3310,8 @@ bad_swap:
 	p->flags = 0;
 	spin_unlock(&swap_lock);
 	vfree(swap_map);
+	kvfree(mpc_swap_generation);
+	bitmap_free(mpc_swap_generation_valid);
 	kvfree(cluster_info);
 	if (inced_nr_rotate_swap)
 		atomic_dec(&nr_rotate_swap);

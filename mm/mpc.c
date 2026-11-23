@@ -10,6 +10,9 @@
 #include <linux/delay.h>
 #include <linux/fs.h>
 #include <linux/timekeeping.h>
+#include <linux/jiffies.h>
+#include <linux/log2.h>
+#include <linux/math64.h>
 #include <linux/printk.h>
 #include <linux/uaccess.h>
 
@@ -39,13 +42,15 @@
  * definitions and Data structures
  * --------------------------------------------------------------------- */
 
- #define PAGE_WALK_INTERVAL_MS 5000
+#define PAGE_WALK_INTERVAL_MS 5000
+#define SWAP_HISTOGRAM_BINS 5
 
 struct mpc_endpoint {
 	atomic_t depth_bins[DEPTH_NR_BINS];
     atomic_t promotions;
     atomic_t new_pages;
     atomic_t accesses;
+    atomic_t swap_age_bins[SWAP_HISTOGRAM_BINS];
 
 	u32 binwidth;
 	u32 max_depth_bin;
@@ -127,6 +132,14 @@ static inline bool mpc_should_track(struct folio *folio, struct mem_cgroup *memc
     return true;
 }
 
+static u32 mpc_current_generation(void)
+{
+	u32 interval = msecs_to_jiffies(PAGE_WALK_INTERVAL_MS);
+
+	/* Avoid recycled MGLRU indices; this epoch advances with monotonic time. */
+	return div_u64(get_jiffies_64(), interval);
+}
+
 //checks and clears the counted bit on a folio, returns true if it was not set.
 inline bool mpc_page_already_counted(struct folio *folio)
 {
@@ -192,11 +205,24 @@ void mpc_hook_from_gen(struct folio *folio, struct lru_gen_folio *lrugen, struct
     atomic_inc(&memcg->mpc->accesses);
 }
 
-void mpc_hook_slow_refault(struct folio *folio)
+void mpc_hook_swapout(struct folio *folio)
+{
+	struct mem_cgroup *memcg = folio_memcg(folio);
+
+	if (!mpc_should_track(folio, memcg))
+		return;
+
+	swap_mpc_set_generation(folio->swap, folio_nr_pages(folio),
+				mpc_current_generation());
+}
+
+void mpc_hook_slow_refault(struct folio *folio, bool has_swap_generation,
+			   u32 swap_generation)
 {
     struct mem_cgroup *memcg = folio_memcg(folio);
     struct lru_gen_folio *lrugen;
     unsigned long depth;
+    u32 age, bin;
 
     if (!mpc_should_track(folio, memcg))
         return;
@@ -209,6 +235,13 @@ void mpc_hook_slow_refault(struct folio *folio)
     record_depth(memcg->mpc, depth);
 
     atomic_inc(&memcg->mpc->promotions);
+
+	if (has_swap_generation) {
+		age = mpc_current_generation() - swap_generation;
+		bin = age ? ilog2(age) + 1 : 0;
+		bin = min_t(u32, bin, SWAP_HISTOGRAM_BINS - 1);
+		atomic_inc(&memcg->mpc->swap_age_bins[bin]);
+	}
 
     mpc_set_page_counted(folio);
 }
@@ -231,6 +264,25 @@ int mpc_seq_show(struct seq_file *m, struct mpc_endpoint *mpc)
 	seq_printf(m, "promotions %u\n", atomic_read(&mpc->promotions));
 	seq_printf(m, "new_pages %u\n", atomic_read(&mpc->new_pages));
 	seq_printf(m, "accesses %u\n", atomic_read(&mpc->accesses));
+	seq_printf(m, "swap_age_generation_bins %u interval_ms %u\n",
+		   SWAP_HISTOGRAM_BINS, PAGE_WALK_INTERVAL_MS);
+	for (int i = 0; i < SWAP_HISTOGRAM_BINS; i++) {
+		u32 min_age, max_age;
+
+		if (SWAP_HISTOGRAM_BINS == 1) {
+			min_age = 0;
+			max_age = ~0U;
+		} else if (!i) {
+			min_age = 0;
+			max_age = 0;
+		} else {
+			min_age = 1U << (i - 1);
+			max_age = i == SWAP_HISTOGRAM_BINS - 1 ?
+				  ~0U : (1U << i) - 1;
+		}
+		seq_printf(m, "swap_age_bin_%d %u %u %u\n", i, min_age,
+			   max_age, atomic_read(&mpc->swap_age_bins[i]));
+	}
 
 	return 0;
 }
@@ -416,6 +468,8 @@ int mpc_set_enabled(struct mpc_endpoint *mpc, bool enable)
         atomic_set(&mpc->new_pages, 0);
         atomic_set(&mpc->promotions, 0);
         atomic_set(&mpc->accesses, 0);
+		for (int i = 0; i < SWAP_HISTOGRAM_BINS; i++)
+			atomic_set(&mpc->swap_age_bins[i], 0);
 
         thread = kthread_run(mpc_thread_fn, mpc->memcg, "mpc_thread");
         if (IS_ERR(thread)) {

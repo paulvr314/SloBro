@@ -287,6 +287,8 @@ struct swap_info_struct {
 	signed char	type;		/* strange name for an index */
 	unsigned int	max;		/* extent of the swap_map */
 	unsigned char *swap_map;	/* vmalloc'ed array of usage counts */
+	u32 *mpc_swap_generation;	/* MPC epoch recorded for each swap slot */
+	unsigned long *mpc_swap_generation_valid;
 	struct swap_cluster_info *cluster_info; /* cluster info. Only for SSD */
 	struct swap_cluster_list free_clusters; /* free clusters list */
 	unsigned int lowest_bit;	/* index of first free in swap_map */
@@ -481,6 +483,10 @@ extern int swap_duplicate(swp_entry_t);
 extern int swapcache_prepare(swp_entry_t);
 extern void swap_free(swp_entry_t);
 extern void swapcache_free_entries(swp_entry_t *entries, int n);
+extern bool swap_mpc_set_generation(swp_entry_t entry, unsigned int nr_pages,
+				    u32 generation);
+extern bool swap_mpc_get_generation(struct swap_info_struct *si,
+				    swp_entry_t entry, u32 *generation);
 extern int free_swap_and_cache(swp_entry_t);
 int swap_type_of(dev_t device, sector_t offset);
 int find_first_swap(dev_t *device);
@@ -515,6 +521,17 @@ static inline struct swap_info_struct *get_swap_device(swp_entry_t entry)
 
 static inline void put_swap_device(struct swap_info_struct *si)
 {
+}
+static inline bool swap_mpc_set_generation(swp_entry_t entry,
+					   unsigned int nr_pages,
+					   u32 generation)
+{
+	return false;
+}
+static inline bool swap_mpc_get_generation(struct swap_info_struct *si,
+					   swp_entry_t entry, u32 *generation)
+{
+	return false;
 }
 
 #define get_nr_swap_pages()			0L

@@ -16,6 +16,8 @@
 #ifndef _MPC_H
 #define _MPC_H
 
+#include <linux/types.h>
+
 #define DEPTH_NR_BINS         1000
 #define MPC_MAX_DEPTH         200000
 
@@ -57,8 +59,12 @@ void mpc_hook_first_access(struct folio *folio);
 void mpc_hook_from_gen(struct folio *folio, struct lru_gen_folio *lrugen,
 			struct mem_cgroup *memcg, int old_gen);
 
+/* Record the current MPC generation when the folio is assigned swap space. */
+void mpc_hook_swapout(struct folio *folio);
+
 /* Case 2: refault -- a swapped-out page was accessed and mapped back in */
-void mpc_hook_slow_refault(struct folio *folio);
+void mpc_hook_slow_refault(struct folio *folio, bool has_swap_generation,
+			   u32 swap_generation);
 
 /* Display MPC metrics in cgroup seq_file */
 int mpc_seq_show(struct seq_file *m, struct mpc_endpoint *mpc);
