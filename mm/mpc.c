@@ -43,6 +43,10 @@
 
 struct mpc_endpoint {
 	atomic_t depth_bins[DEPTH_NR_BINS];
+    atomic_t promotions;
+    atomic_t new_pages;
+    atomic_t accesses;
+
 	u32 binwidth;
 	u32 max_depth_bin;
 	bool enabled;               /* toggled via memory.mpc_enabled, off by default */
@@ -154,7 +158,7 @@ void mpc_hook_first_access(struct folio *folio)
     struct mem_cgroup *memcg = folio_memcg(folio);
     if (mpc_should_track(folio, memcg)) {
         record_depth(memcg->mpc, 0);
-        atomic_inc(&memcg->mpc->depth_bins[memcg->mpc->max_depth_bin-4]);
+        atomic_inc(&memcg->mpc->new_pages);
 
         mpc_set_page_counted(folio);
     }
@@ -185,7 +189,7 @@ void mpc_hook_from_gen(struct folio *folio, struct lru_gen_folio *lrugen, struct
 
     record_depth(memcg->mpc, depth);
 
-    atomic_inc(&memcg->mpc->depth_bins[memcg->mpc->max_depth_bin-3]);
+    atomic_inc(&memcg->mpc->accesses);
 }
 
 void mpc_hook_slow_refault(struct folio *folio)
@@ -204,7 +208,7 @@ void mpc_hook_slow_refault(struct folio *folio)
     depth +=(total_swap_pages - get_nr_swap_pages()) / 2;
     record_depth(memcg->mpc, depth);
 
-    atomic_inc(&memcg->mpc->depth_bins[memcg->mpc->max_depth_bin-1]);
+    atomic_inc(&memcg->mpc->promotions);
 
     mpc_set_page_counted(folio);
 }
@@ -224,7 +228,26 @@ int mpc_seq_show(struct seq_file *m, struct mpc_endpoint *mpc)
 		seq_printf(m, "%d\n", atomic_read(&mpc->depth_bins[i]));
 	}
 
+	seq_printf(m, "promotions %u\n", atomic_read(&mpc->promotions));
+	seq_printf(m, "new_pages %u\n", atomic_read(&mpc->new_pages));
+	seq_printf(m, "accesses %u\n", atomic_read(&mpc->accesses));
+
 	return 0;
+}
+
+u64 mpc_promotions_read(struct mpc_endpoint *mpc)
+{
+	return mpc ? atomic_read(&mpc->promotions) : 0;
+}
+
+u64 mpc_new_pages_read(struct mpc_endpoint *mpc)
+{
+	return mpc ? atomic_read(&mpc->new_pages) : 0;
+}
+
+u64 mpc_accesses_read(struct mpc_endpoint *mpc)
+{
+	return mpc ? atomic_read(&mpc->accesses) : 0;
 }
 
 /* ---------------------------------------------------------------------
@@ -390,6 +413,9 @@ int mpc_set_enabled(struct mpc_endpoint *mpc, bool enable)
     if (enable) {
         for (int i = 0; i < DEPTH_NR_BINS; i++)
             atomic_set(&mpc->depth_bins[i], 0);
+        atomic_set(&mpc->new_pages, 0);
+        atomic_set(&mpc->promotions, 0);
+        atomic_set(&mpc->accesses, 0);
 
         thread = kthread_run(mpc_thread_fn, mpc->memcg, "mpc_thread");
         if (IS_ERR(thread)) {

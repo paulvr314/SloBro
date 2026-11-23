@@ -6634,6 +6634,24 @@ static int memory_cgroup_mpc_show(struct seq_file *sf, void *v)
 	return mpc_seq_show(sf, memcg->mpc);
 }
 
+static u64 memory_mpc_promotions_read(struct cgroup_subsys_state *css,
+				      struct cftype *cft)
+{
+	return mpc_promotions_read(mem_cgroup_from_css(css)->mpc);
+}
+
+static u64 memory_mpc_new_pages_read(struct cgroup_subsys_state *css,
+				     struct cftype *cft)
+{
+	return mpc_new_pages_read(mem_cgroup_from_css(css)->mpc);
+}
+
+static u64 memory_mpc_accesses_read(struct cgroup_subsys_state *css,
+				    struct cftype *cft)
+{
+	return mpc_accesses_read(mem_cgroup_from_css(css)->mpc);
+}
+
 //paul mpc on/off switch -- write 1 to start tracking, 0 to stop
 static u64 memory_mpc_enabled_read(struct cgroup_subsys_state *css,
 				   struct cftype *cft)
@@ -6838,6 +6856,21 @@ static struct cftype memory_files[] = {
 		.name = "mpc",
 		.flags = CFTYPE_NOT_ON_ROOT,
 		.seq_show = memory_cgroup_mpc_show,
+	},
+	{
+		.name = "mpc_promotions",
+		.flags = CFTYPE_NOT_ON_ROOT,
+		.read_u64 = memory_mpc_promotions_read,
+	},
+	{
+		.name = "mpc_new_pages",
+		.flags = CFTYPE_NOT_ON_ROOT,
+		.read_u64 = memory_mpc_new_pages_read,
+	},
+	{
+		.name = "mpc_accesses",
+		.flags = CFTYPE_NOT_ON_ROOT,
+		.read_u64 = memory_mpc_accesses_read,
 	},
 	{
 		.name = "mpc_enabled",
